@@ -35,14 +35,14 @@ export function useCursors(roomId, userName, ownerConflict, infiniteCanvas) {
           type: "broadcast",
           event: "cursor-move",
           payload: { 
-            user: userName, 
+            user: userName,
             x: worldPos.x, 
-            y: worldPos.y, 
-            color: generateUserColor(userName) 
+            y: worldPos.y,
+            color: generateUserColor(userName)
           }
         });
       }
-    }, 16); // ~60fps
+    }, 16);
   };
 
   // Mouse event handlers
