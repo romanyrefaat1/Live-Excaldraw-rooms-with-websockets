@@ -1,103 +1,161 @@
-import Image from "next/image";
+// page.js (Home page)
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useSocketContext } from "@/hooks/useSocket";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [isCreating, setIsCreating] = useState(true);
+  const [name, setName] = useState("Josh");
+  const [value, setValue] = useState("room-1");
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const router = useRouter();
+  const { sendMessage, addEventListener, removeEventListener, isConnected } = useSocketContext();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  useEffect(() => {
+    // Set up event listeners for WebSocket responses
+    const handleCreateRoomResponse = (data) => {
+      setIsLoading(false);
+      if (data.success) {
+        // Store userName in sessionStorage for this room
+        sessionStorage.setItem(`room_${value.trim()}_userName`, name.trim());
+        router.push("/rooms/" + value.trim());
+      } else {
+        setError(data.error || "Failed to create room");
+      }
+    };
+
+    const handleCheckRoomResponse = (data) => {
+      setIsLoading(false);
+      if (data.exists) {
+        const room = data.room;
+        
+        // Check if trying to join as owner when owner might already be active
+        if (name.trim() === room.ownerName && room.activeUsers.includes(name.trim())) {
+          setError("The room owner is already active on another device. Only one device can be logged in as the owner at a time.");
+          return;
+        }
+        
+        // Store userName in sessionStorage for this room
+        sessionStorage.setItem(`room_${value.trim()}_userName`, name.trim());
+        router.push("/rooms/" + value.trim());
+      } else {
+        setError("Room not found");
+      }
+    };
+
+    addEventListener('create-room-response', handleCreateRoomResponse);
+    addEventListener('check-room-response', handleCheckRoomResponse);
+
+    return () => {
+      removeEventListener('create-room-response', handleCreateRoomResponse);
+      removeEventListener('check-room-response', handleCheckRoomResponse);
+    };
+  }, [addEventListener, removeEventListener, value, name, router]);
+
+  const handleSubmit = async () => {
+    if (name.trim().length === 0) {
+      setError("Please type a valid name");
+      return;
+    }
+
+    if (value.trim().length === 0) {
+      setError("Please type a valid room name");
+      return;
+    }
+
+    if (!isConnected) {
+      setError("Not connected to server. Please wait...");
+      return;
+    }
+
+    setError(null);
+    setIsLoading(true);
+
+    if (isCreating) {
+      // Create room
+      sendMessage('create-room', {
+        roomId: value.trim(),
+        ownerName: name.trim()
+      });
+    } else {
+      // Check if room exists before joining
+      sendMessage('check-room', {
+        roomId: value.trim()
+      });
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+        <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">
+          Welcome to Live Drawing Board
+        </h1>
+        
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="room-input" className="block text-sm font-medium text-gray-700 mb-2">
+              {isCreating ? "Room Name (to create)" : "Room Name (to join)"}
+            </label>
+            <input
+              id="room-input"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter room name"
+              disabled={isLoading}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </div>
+
+          <div>
+            <label htmlFor="user-name" className="block text-sm font-medium text-gray-700 mb-2">
+              Your Name
+            </label>
+            <input
+              id="user-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your name"
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <span className={isConnected ? 'text-green-600' : 'text-red-600'}>
+              {isConnected ? 'Connected to server' : 'Disconnected from server'}
+            </span>
+          </div>
+
+          <button
+            onClick={handleSubmit}
+            disabled={isLoading || !isConnected}
+            className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            Read our docs
-          </a>
+            {isLoading ? 'Processing...' : `${isCreating ? "Create" : "Join"} Room`}
+          </button>
+
+          {error && (
+            <p className="text-red-500 text-sm text-center">{error}</p>
+          )}
+
+          <button
+            onClick={() => {
+              setIsCreating(prev => !prev);
+              setError(null);
+            }}
+            disabled={isLoading}
+            className="w-full text-blue-500 underline hover:text-blue-700 disabled:text-gray-400"
+          >
+            {isCreating ? "Join existing room instead" : "Create new room instead"}
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
   );
 }
