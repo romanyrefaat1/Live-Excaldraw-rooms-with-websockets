@@ -8,6 +8,7 @@ export default function Cursor({ user, cursor }) {
           transform: 'translate(-2px, -2px)'
         }}
       >
+        {/* <MousePointer  size={24} /> */}
         {/* Cursor dot */}
         <div
           className="w-4 h-4 rounded-full border-2 border-white shadow-lg"
