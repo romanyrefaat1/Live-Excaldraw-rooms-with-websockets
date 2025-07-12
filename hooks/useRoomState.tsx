@@ -8,62 +8,65 @@ export function useRoomState(roomId, userName) {
   const [isOwner, setIsOwner] = useState(false);
   const [ownerConflict, setOwnerConflict] = useState(false);
 
-  // Main room setup - only runs when we have both roomId and userName
+  const updateActiveUsers = async (updatedUsers) => {
+    if (!roomId) return;
+    try {
+      await supabase
+        .from("rooms")
+        .update({ active_users: updatedUsers })
+        .eq("id", roomId);
+      setActiveUsers(updatedUsers);
+    } catch (error) {
+      console.error("Error updating active users:", error);
+    }
+  };
+
+  // Main room setup
   useEffect(() => {
     if (!roomId || !userName) return;
-    
-    console.log('Setting up room for user:', userName);
-    
+
     const setupRoom = async () => {
       try {
         const { data: room, error } = await supabase
-          .from('rooms')
-          .select('owner_name, active_users')
-          .eq('id', roomId)
+          .from("rooms")
+          .select("owner_name, active_users")
+          .eq("id", roomId)
           .single();
-        
+
         if (error) {
-          console.error('Error fetching room info:', error);
+          console.error("Error fetching room info:", error);
           return;
         }
-        
+
         if (!room) {
-          console.error('Room not found');
+          console.error("Room not found");
           return;
         }
-        
+
         setRoomOwner(room.owner_name);
         const currentActiveUsers = room.active_users || [];
         setActiveUsers(currentActiveUsers);
-        
-        // Check ownership and conflicts
+
         const isRoomOwner = userName === room.owner_name;
         setIsOwner(isRoomOwner);
-        
+
         if (isRoomOwner && currentActiveUsers.includes(userName)) {
-          // Owner is already active - show conflict
           setOwnerConflict(true);
           return;
         } else {
           setOwnerConflict(false);
         }
-        
-        // Add user to active_users if not already there
+
         if (!currentActiveUsers.includes(userName)) {
           const updatedUsers = [...currentActiveUsers, userName];
-          setActiveUsers(updatedUsers);
-          
-          await supabase
-            .from('rooms')
-            .update({ active_users: updatedUsers })
-            .eq('id', roomId);
+          await updateActiveUsers(updatedUsers);
         }
-        
+
       } catch (error) {
-        console.error('Error in setupRoom:', error);
+        console.error("Error in setupRoom:", error);
       }
     };
-    
+
     setupRoom();
   }, [roomId, userName]);
 
@@ -82,7 +85,6 @@ export function useRoomState(roomId, userName) {
           filter: `id=eq.${roomId}`,
         },
         (payload) => {
-          console.log('Room updated:', payload.new);
           if (payload.new.active_users) {
             setActiveUsers(payload.new.active_users);
           }
@@ -93,37 +95,32 @@ export function useRoomState(roomId, userName) {
         setConnectedUsers(Object.keys(presenceState).length);
       })
       .subscribe(async (status) => {
-        console.log('Room state channel status:', status);
         if (status === "SUBSCRIBED") {
           await channel.track({ user: userName, timestamp: Date.now() });
         }
       });
 
-    // Cleanup function
     return () => {
-      console.log('Cleaning up room state channel');
-      
-      const removeUserFromRoom = async () => {
+      const removeUser = async () => {
         try {
           const { data: room } = await supabase
-            .from('rooms')
-            .select('active_users')
-            .eq('id', roomId)
+            .from("rooms")
+            .select("active_users")
+            .eq("id", roomId)
             .single();
-          
+
           if (room && room.active_users) {
-            const updatedUsers = room.active_users.filter(user => user !== userName);
-            await supabase
-              .from('rooms')
-              .update({ active_users: updatedUsers })
-              .eq('id', roomId);
+            const updatedUsers = room.active_users.filter(
+              (user) => user !== userName
+            );
+            await updateActiveUsers(updatedUsers);
           }
         } catch (error) {
-          console.error('Error removing user from room:', error);
+          console.error("Error removing user:", error);
         }
       };
-      
-      removeUserFromRoom();
+
+      removeUser();
       supabase.removeChannel(channel);
     };
   }, [roomId, userName, ownerConflict]);
@@ -133,6 +130,6 @@ export function useRoomState(roomId, userName) {
     activeUsers,
     roomOwner,
     isOwner,
-    ownerConflict
+    ownerConflict,
   };
 }

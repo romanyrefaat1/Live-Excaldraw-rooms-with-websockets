@@ -123,7 +123,7 @@ export default function ControlPanel({
         }
       }
     }
-  }, [otherCursors, followingUser, camera, setCamera, followWithCamera]);
+  }, [otherCursors, followingUser, setCamera, followWithCamera]);
 
   // Stop following if user disconnects
   useEffect(() => {
@@ -171,7 +171,7 @@ export default function ControlPanel({
     <div className="overflow-y-auto">
       {/* Connection Status */}
       <button onClick={() => setIsOpen(prev => !prev)}>{isOpen ? <ArrowDown /> : <ArrowUp />}</button>
-      {isOpen && <div className='fixed bg-white/95 backdrop-blur-sm rounded-lg p-4 shadow-lg border max-w-sm top-8 left-2 max-h-[calc(100vh-2rem)] overflow-y-auto'>
+      {isOpen && <div className='fixed bg-white/95 backdrop-blur-sm rounded-lg p-4 shadow-lg border max-w-sm top-18 left-2 max-h-[calc(100vh-2rem)] overflow-y-auto'>
       <div className="flex items-center gap-3 mb-3">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>

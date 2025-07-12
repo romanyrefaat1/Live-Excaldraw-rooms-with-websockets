@@ -10,6 +10,11 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteC
   const [isReplaying, setIsReplaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
+  // New state for drawing tools
+  const [drawingTool, setDrawingTool] = useState('freehand'); // 'freehand', 'rectangle', 'circle', 'line'
+  const [previewShape, setPreviewShape] = useState(null);
+  const [startPoint, setStartPoint] = useState(null);
+  
   // Keep track of our own strokes to avoid double-drawing
   const myStrokesRef = useRef(new Set());
 
@@ -74,6 +79,11 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteC
       drawStrokeOnCanvas(ctx, currentStroke);
     }
     
+    // Draw preview shape
+    if (previewShape) {
+      drawPreviewShape(ctx, previewShape);
+    }
+    
     // Reset transform
     infiniteCanvas.resetTransform(ctx);
   };
@@ -85,13 +95,64 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteC
     ctx.lineWidth = stroke.size;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
     
-    for (let i = 1; i < stroke.points.length; i++) {
-      ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+    if (stroke.type === 'freehand') {
+      ctx.beginPath();
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+      ctx.stroke();
+    } else if (stroke.type === 'rectangle') {
+      const start = stroke.points[0];
+      const end = stroke.points[1];
+      const width = end.x - start.x;
+      const height = end.y - start.y;
+      
+      ctx.beginPath();
+      ctx.rect(start.x, start.y, width, height);
+      ctx.stroke();
+    } else if (stroke.type === 'circle') {
+      const start = stroke.points[0];
+      const end = stroke.points[1];
+      const radius = Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
+      
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, radius, 0, 2 * Math.PI);
+      ctx.stroke();
+    } else if (stroke.type === 'line') {
+      const start = stroke.points[0];
+      const end = stroke.points[1];
+      
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
     }
-    ctx.stroke();
+  };
+
+  const drawPreviewShape = (ctx, shape) => {
+    ctx.strokeStyle = shape.color;
+    ctx.lineWidth = shape.size;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.globalAlpha = 0.7; // Make preview semi-transparent
+    
+    drawStrokeOnCanvas(ctx, shape);
+    
+    ctx.globalAlpha = 1; // Reset alpha
+  };
+
+  const generateShapePoints = (tool, startPoint, endPoint) => {
+    switch (tool) {
+      case 'rectangle':
+      case 'circle':
+      case 'line':
+        return [startPoint, endPoint];
+      default:
+        return [startPoint, endPoint];
+    }
   };
 
   const startDrawing = (e) => {
@@ -104,17 +165,33 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteC
 
     // Get world coordinates instead of screen coordinates
     const worldPos = infiniteCanvas.getWorldMousePos(e);
-
     const strokeId = crypto.randomUUID();
+    
     setIsDrawing(true);
-    setCurrentStroke({
-      id: strokeId,
-      points: [worldPos],
-      size: strokeSize,
-      color: strokeColor,
-      length: 0,
-      room_id: roomId,
-    });
+    setStartPoint(worldPos);
+    
+    if (drawingTool === 'freehand') {
+      setCurrentStroke({
+        id: strokeId,
+        type: 'freehand',
+        points: [worldPos],
+        size: strokeSize,
+        color: strokeColor,
+        length: 0,
+        room_id: roomId,
+      });
+    } else {
+      // For shapes, we'll create the stroke when mouse is released
+      setPreviewShape({
+        id: strokeId,
+        type: drawingTool,
+        points: [worldPos, worldPos],
+        size: strokeSize,
+        color: strokeColor,
+        length: 0,
+        room_id: roomId,
+      });
+    }
     
     myStrokesRef.current.add(strokeId);
   };
@@ -126,23 +203,38 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteC
       return;
     }
     
-    if (!isDrawing || !currentStroke || isReplaying || isLoading || ownerConflict) return;
+    if (!isDrawing || isReplaying || isLoading || ownerConflict) return;
 
     // Get world coordinates
     const worldPos = infiniteCanvas.getWorldMousePos(e);
-    const lastPoint = currentStroke.points.slice(-1)[0];
-    const dist = getDistance(lastPoint, worldPos);
+    
+    if (drawingTool === 'freehand') {
+      if (!currentStroke) return;
+      
+      const lastPoint = currentStroke.points.slice(-1)[0];
+      const dist = getDistance(lastPoint, worldPos);
 
-    // Update current stroke
-    const updatedStroke = {
-      ...currentStroke,
-      points: [...currentStroke.points, worldPos],
-      length: currentStroke.length + dist,
-    };
+      // Update current stroke
+      const updatedStroke = {
+        ...currentStroke,
+        points: [...currentStroke.points, worldPos],
+        length: currentStroke.length + dist,
+      };
+      
+      setCurrentStroke(updatedStroke);
+    } else {
+      // Update preview shape
+      if (previewShape && startPoint) {
+        const updatedShape = {
+          ...previewShape,
+          points: generateShapePoints(drawingTool, startPoint, worldPos),
+          length: getDistance(startPoint, worldPos),
+        };
+        setPreviewShape(updatedShape);
+      }
+    }
     
-    setCurrentStroke(updatedStroke);
-    
-    // Redraw canvas to show the current stroke
+    // Redraw canvas to show the current stroke or preview
     redrawCanvas();
   };
 
@@ -153,36 +245,50 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteC
       return;
     }
     
-    if (!isDrawing || !currentStroke) return;
+    if (!isDrawing) return;
     setIsDrawing(false);
 
     try {
-      console.log('Saving stroke:', currentStroke);
+      let strokeToSave = null;
       
-      const { data, error } = await supabase.from("sketches").insert([
-        {
-          room_id: roomId,
-          points: currentStroke.points,
-          color: currentStroke.color,
-          size: currentStroke.size,
-          length: currentStroke.length,
-        },
-      ]).select();
-
-      if (error) {
-        console.error('Error saving stroke:', error);
-        throw error;
+      if (drawingTool === 'freehand' && currentStroke) {
+        strokeToSave = currentStroke;
+      } else if (previewShape) {
+        strokeToSave = previewShape;
       }
       
-      console.log('Stroke saved successfully:', data);
-      setStrokes(prev => [...prev, currentStroke]);
+      if (strokeToSave) {
+        console.log('Saving stroke:', strokeToSave);
+        
+        const { data, error } = await supabase.from("sketches").insert([
+          {
+            room_id: roomId,
+            type: strokeToSave.type,
+            points: strokeToSave.points,
+            color: strokeToSave.color,
+            size: strokeToSave.size,
+            length: strokeToSave.length,
+          },
+        ]).select();
+
+        if (error) {
+          console.error('Error saving stroke:', error);
+          throw error;
+        }
+        
+        console.log('Stroke saved successfully:', data);
+        setStrokes(prev => [...prev, strokeToSave]);
+      }
       
     } catch (error) {
       console.error("Error saving stroke:", error);
       alert('Failed to save drawing. Please check your connection.');
     }
 
+    // Reset drawing state
     setCurrentStroke(null);
+    setPreviewShape(null);
+    setStartPoint(null);
   };
 
   const clearCanvas = async () => {
@@ -204,6 +310,8 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteC
       // Clear local state and redraw
       setStrokes([]);
       setCurrentStroke(null);
+      setPreviewShape(null);
+      setStartPoint(null);
       myStrokesRef.current.clear();
       redrawCanvas();
       
@@ -235,16 +343,22 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteC
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       
-      // Draw stroke progressively
-      for (let i = 1; i < stroke.points.length; i++) {
-        const p0 = stroke.points[i - 1];
-        const p1 = stroke.points[i];
-        ctx.beginPath();
-        ctx.moveTo(p0.x, p0.y);
-        ctx.lineTo(p1.x, p1.y);
-        ctx.stroke();
-        
-        await new Promise((res) => setTimeout(res, 3));
+      if (stroke.type === 'freehand') {
+        // Draw freehand stroke progressively
+        for (let i = 1; i < stroke.points.length; i++) {
+          const p0 = stroke.points[i - 1];
+          const p1 = stroke.points[i];
+          ctx.beginPath();
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(p1.x, p1.y);
+          ctx.stroke();
+          
+          await new Promise((res) => setTimeout(res, 3));
+        }
+      } else {
+        // Draw shapes instantly
+        drawStrokeOnCanvas(ctx, stroke);
+        await new Promise((res) => setTimeout(res, 100));
       }
     }
     
@@ -287,7 +401,7 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteC
     if (!isLoading && !ownerConflict) {
       redrawCanvas();
     }
-  }, [infiniteCanvas.camera, strokes, currentStroke, isLoading, ownerConflict]);
+  }, [infiniteCanvas.camera, strokes, currentStroke, previewShape, isLoading, ownerConflict]);
 
   // Load existing sketches when component mounts
   useEffect(() => {
@@ -352,6 +466,8 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteC
     setStrokeColor,
     isReplaying,
     isLoading,
+    drawingTool,
+    setDrawingTool,
     startDrawing,
     handleMouseMove,
     handleMouseLeave,

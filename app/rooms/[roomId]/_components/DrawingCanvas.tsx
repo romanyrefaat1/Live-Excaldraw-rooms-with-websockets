@@ -5,7 +5,6 @@ import { useInfiniteCanvas } from "@/hooks/useInfiniteCanvas";
 import { useDrawing } from "@/hooks/useDrawing";
 import { useRoomState } from "@/hooks/useRoomState";
 import { useCursors } from "@/hooks/useCursors";
-import ControlPanel from "./nav/ControlPanel";
 import Cursor from "./Cursor";
 import OwnerConflictModal from "./OwnerConflictModal";
 import DrawingInfo from "./DrawingInfo";
@@ -128,12 +127,25 @@ export default function DrawingCanvas({ roomId }) {
     drawing.handleMouseLeave();
   };
 
-  // Update cursor style based on mode
+  // Update cursor style based on mode and drawing tool
   const getCursorStyle = () => {
     if (drawing.isLoading || roomState.ownerConflict) return "not-allowed";
     if (infiniteCanvas.isPanning) return "grabbing";
     if (infiniteCanvas.isSpacePressed) return "grab";
-    return "crosshair";
+    
+    // Different cursors for different drawing tools
+    switch (drawing.drawingTool) {
+      case 'freehand':
+        return "crosshair";
+      case 'line':
+        return "crosshair";
+      case 'rectangle':
+        return "crosshair";
+      case 'circle':
+        return "crosshair";
+      default:
+        return "crosshair";
+    }
   };
 
   // Handle camera changes and notify cursors
@@ -150,49 +162,19 @@ export default function DrawingCanvas({ roomId }) {
         roomOwner={roomState.roomOwner}
       />
 
-<div className="fixed top-4">
-      <Navbar 
-         drawing={drawing}
-         roomState={roomState}
-         userName={userName}
-         cursors={cursors}
-         infiniteCanvas={infiniteCanvas}
-         canvasStyle={canvasStyle}
-         setCanvasStyle={setCanvasStyle}
-        gridOpacity={gridOpacity}
-        setGridOpacity={setGridOpacity}
-      />
-</div>
-      {/* <ControlPanel
-        connectedUsers={roomState.connectedUsers}
-        isLoading={drawing.isLoading}
-        userName={userName}
-        isOwner={roomState.isOwner}
-        roomOwner={roomState.roomOwner}
-        activeUsers={roomState.activeUsers}
-        otherCursors={cursors.otherCursors}
-        strokeSize={drawing.strokeSize}
-        setStrokeSize={drawing.setStrokeSize}
-        strokeColor={drawing.strokeColor}
-        setStrokeColor={drawing.setStrokeColor}
-        isReplaying={drawing.isReplaying}
-        strokes={drawing.strokes}
-        onClearCanvas={drawing.clearCanvas}
-        onReplayStrokes={drawing.replayStrokes}
-        ownerConflict={roomState.ownerConflict}
-        // Infinite canvas props
-        camera={infiniteCanvas.camera}
-        isPanning={infiniteCanvas.isPanning}
-        isSpacePressed={infiniteCanvas.isSpacePressed}
-        onResetCamera={infiniteCanvas.resetCamera}
-        onZoomToFit={drawing.zoomToFitContent}
-        setCamera={infiniteCanvas.setCamera}
-        // Canvas style props
-        canvasStyle={canvasStyle}
-        setCanvasStyle={setCanvasStyle}
-        gridOpacity={gridOpacity}
-        setGridOpacity={setGridOpacity}
-      /> */}
+      <div className="fixed top-4 left-4 z-10">
+        <Navbar 
+          drawing={drawing}
+          roomState={roomState}
+          userName={userName}
+          cursors={cursors}
+          infiniteCanvas={infiniteCanvas}
+          canvasStyle={canvasStyle}
+          setCanvasStyle={setCanvasStyle}
+          gridOpacity={gridOpacity}
+          setGridOpacity={setGridOpacity}
+        />
+      </div>
 
       <canvas
         ref={canvasRef}

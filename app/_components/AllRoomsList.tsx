@@ -1,6 +1,14 @@
-import Link from "next/link";
+"use client";
+
+import { useRouter } from "next/navigation";
 
 export default function AllRoomsList({ data, error }) {
+  const route = useRouter()
+  const handleRedirect = (id)=>{
+    sessionStorage.setItem(`room_${id.trim()}_userName`, `user_${Math.trunc(Math.random()*100+10)}`);
+    route.push(`/rooms/${id}`)
+  }
+  
     if (error)
       return (
         <div className="flex items-center justify-center text-red-500 w-full h-full">
@@ -41,7 +49,7 @@ export default function AllRoomsList({ data, error }) {
                     ? item.active_users.join(", ")
                     : "-"}
                 </td>
-                <td className="px-4 py-2 border border-gray-300 text-center"><Link href={"/rooms/"+item.id}>Enter Room</Link></td>
+                <td className="px-4 py-2 border border-gray-300 text-center"><button onClick={()=>handleRedirect(item.id)}>Enter Room</button></td>
               </tr>
             ))}
           </tbody>

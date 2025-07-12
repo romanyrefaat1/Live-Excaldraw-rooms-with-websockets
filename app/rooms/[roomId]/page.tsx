@@ -1,7 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import DrawingCanvas from "./_components/DrawingCanvas";
 import { notFound } from "next/navigation";
-import { SocketProvider } from "@/hooks/useSocket";
 
 export default async function RoomPage ({params}){
     const {roomId} = await params;
@@ -11,8 +10,6 @@ export default async function RoomPage ({params}){
     if (error || !data) return notFound();
 
     return (
-        <SocketProvider>
         <DrawingCanvas roomId={roomId}/>
-        </SocketProvider>
     )
 }

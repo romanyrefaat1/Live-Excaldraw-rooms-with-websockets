@@ -8,6 +8,8 @@ export default function JoinOrCreateRoomForm() {
   const [isCreating, setIsCreating] = useState(true);
   const [name, setName] = useState("Josh");
   const [value, setValue] = useState("room-1");
+  const [password, setPassword] = useState("123")
+  const [ppassword, setPPassword] = useState("")
   const router = useRouter();
   const [error, setError] = useState(null);
 
@@ -18,12 +20,19 @@ export default function JoinOrCreateRoomForm() {
       return;
     }
 
+    if ( password.trim().length === 0 || password.length < 3 || ppassword.trim().length === 0 || ppassword.length < 3 ) {
+      setError("Password must be at least 3 letters")
+      return;
+    }
+
     if (isCreating) {
       const { error } = await supabase.from("rooms").insert([
         {
           id: value,
           owner_name: name,
           active_users: [],
+          password,
+          p_password: ppassword
         },
       ]);
       if (error) {
@@ -39,10 +48,11 @@ export default function JoinOrCreateRoomForm() {
       .from("rooms")
       .select("id,owner_name,active_users")
       .eq("id", value.trim())
+      .eq("password", password)
       .single();
 
     if (fetchError || !data) {
-      setError("Room not found");
+      setError("Room not found or wrong password");
       return;
     }
 
@@ -85,6 +95,30 @@ export default function JoinOrCreateRoomForm() {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Enter your name"
+        className="w-full mb-4 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+
+      
+<label htmlFor="password-input" className="block text-gray-700 font-medium mb-1">
+        Public Password (Users enter as "User" role)
+      </label>
+      <input
+        id="password-input"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Enter a strong password"
+        className="w-full mb-4 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      <span>If you want your room to be public leave it as 123.</span>
+
+<label htmlFor="private-password-input" className="block text-gray-700 font-medium mb-1">
+        Private Password (User enters as "Owner" role)
+      </label>
+      <input
+        id="private-password-input"
+        value={ppassword}
+        onChange={(e) => setPPassword(e.target.value)}
+        placeholder="Enter a strong password"
         className="w-full mb-4 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
 
