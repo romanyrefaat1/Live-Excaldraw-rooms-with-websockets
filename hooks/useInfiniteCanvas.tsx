@@ -1,3 +1,4 @@
+// hooks/useInfiniteCanvas.js
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 export function useInfiniteCanvas(canvasRef, canvasStyle = 'grid', gridOpacity = 0.3) {
@@ -322,7 +323,7 @@ export function useInfiniteCanvas(canvasRef, canvasStyle = 'grid', gridOpacity =
     const zoom = Math.min(zoomX, zoomY, 1);
 
     const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerY = (bounds.minY + bounds.maxY) / 2;
+    const centerY = (bounds.myY + bounds.maxY) / 2;
 
     setCamera({
       x: centerX - canvas.width / (2 * zoom),

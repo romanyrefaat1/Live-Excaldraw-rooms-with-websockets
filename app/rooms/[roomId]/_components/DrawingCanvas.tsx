@@ -52,9 +52,10 @@ export default function DrawingCanvas({ roomId }) {
       canvas.style.height = window.innerHeight + 'px';
       
       // Redraw after resize
-      setTimeout(() => {
-        drawing.redrawCanvas();
-      }, 0);
+      // The useDrawing hook's requestAnimationFrame loop will handle continuous redraws.
+      // We only need to trigger a redraw if the canvas dimensions change,
+      // and the exposed redrawCanvas handles that by immediately redrawing and restarting the loop.
+      drawing.redrawCanvas();
     };
 
     resizeCanvas();
@@ -68,31 +69,16 @@ export default function DrawingCanvas({ roomId }) {
     return () => {
       window.removeEventListener('resize', resizeCanvas);
     };
-  }, [roomId, userName, roomState.ownerConflict, drawing.redrawCanvas]);
+  }, [roomId, userName, roomState.ownerConflict, drawing]); // Added drawing as dependency to access redrawCanvas
 
   // Apply canvas style changes
+  // This effect now only updates the state variables,
+  // the drawing loop in useDrawing will pick up these changes and redraw.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    switch (canvasStyle) {
-      case 'white':
-        canvas.style.backgroundColor = '#ffffff';
-        break;
-      case 'empty':
-        canvas.style.backgroundColor = 'transparent';
-        break;
-      case 'grid':
-      default:
-        canvas.style.backgroundColor = '#fafafa';
-        break;
-    }
-
-    // Trigger redraw to update grid
-    setTimeout(() => {
-      drawing.redrawCanvas();
-    }, 0);
-  }, [canvasStyle, gridOpacity, drawing.redrawCanvas]);
+    // The background color is now set directly in the canvas style prop.
+    // The grid drawing is handled by useDrawing's redrawCanvas.
+    // No explicit redraw needed here, as the animation loop will naturally update.
+  }, [canvasStyle, gridOpacity]);
 
   // Handle mouse events with proper coordination between infinite canvas and drawing
   const handleMouseDown = (e) => {
@@ -108,6 +94,8 @@ export default function DrawingCanvas({ roomId }) {
     cursors.handleMouseMove(e);
     
     // Handle infinite canvas mouse move first
+    // If infiniteCanvas handles the move (panning), it will change camera state,
+    // which then triggers redrawCanvas via useDrawing's useEffect.
     if (!infiniteCanvas.handleMouseMove(e)) {
       // If infinite canvas doesn't handle it, let drawing handle it
       drawing.handleMouseMove(e);
@@ -150,6 +138,7 @@ export default function DrawingCanvas({ roomId }) {
 
   // Handle camera changes and notify cursors
   useEffect(() => {
+    // This effect is fine, it just notifies cursors.
     if (cursors.handleCameraChange) {
       cursors.handleCameraChange();
     }
@@ -181,6 +170,7 @@ export default function DrawingCanvas({ roomId }) {
         style={{
           border: "1px solid #ccc",
           cursor: getCursorStyle(),
+          // Set background color directly here
           backgroundColor: canvasStyle === 'white' ? '#ffffff' : canvasStyle === 'empty' ? 'transparent' : '#fafafa',
           pointerEvents: roomState.ownerConflict ? "none" : "auto",
           display: "block"
