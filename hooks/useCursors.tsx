@@ -36,7 +36,7 @@ export function useCursors(roomId, userName, ownerConflict, infiniteCanvas) {
           type: "broadcast",
           event: "cursor-move",
           payload: { 
-            user: userName, 
+            user: userName,
             x: worldPos.x, 
             y: worldPos.y, 
             color: generateUserColor(userName),

@@ -5,10 +5,11 @@ import { useInfiniteCanvas } from "@/hooks/useInfiniteCanvas";
 import { useDrawing } from "@/hooks/useDrawing";
 import { useRoomState } from "@/hooks/useRoomState";
 import { useCursors } from "@/hooks/useCursors";
-import ControlPanel from "./ControlPanel";
+import ControlPanel from "./nav/ControlPanel";
 import Cursor from "./Cursor";
 import OwnerConflictModal from "./OwnerConflictModal";
 import DrawingInfo from "./DrawingInfo";
+import Navbar from "./nav/Navbar";
 
 export default function DrawingCanvas({ roomId }) {
   const canvasRef = useRef(null);
@@ -149,7 +150,20 @@ export default function DrawingCanvas({ roomId }) {
         roomOwner={roomState.roomOwner}
       />
 
-      <ControlPanel
+<div className="fixed top-4">
+      <Navbar 
+         drawing={drawing}
+         roomState={roomState}
+         userName={userName}
+         cursors={cursors}
+         infiniteCanvas={infiniteCanvas}
+         canvasStyle={canvasStyle}
+         setCanvasStyle={setCanvasStyle}
+        gridOpacity={gridOpacity}
+        setGridOpacity={setGridOpacity}
+      />
+</div>
+      {/* <ControlPanel
         connectedUsers={roomState.connectedUsers}
         isLoading={drawing.isLoading}
         userName={userName}
@@ -178,7 +192,7 @@ export default function DrawingCanvas({ roomId }) {
         setCanvasStyle={setCanvasStyle}
         gridOpacity={gridOpacity}
         setGridOpacity={setGridOpacity}
-      />
+      /> */}
 
       <canvas
         ref={canvasRef}
