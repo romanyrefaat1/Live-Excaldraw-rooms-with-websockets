@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
-export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
+export function useDrawing(canvasRef, roomId, userName, ownerConflict, infiniteCanvas) {
   const [isDrawing, setIsDrawing] = useState(false);
   const [strokes, setStrokes] = useState([]);
   const [currentStroke, setCurrentStroke] = useState(null);
@@ -12,11 +12,6 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
   
   // Keep track of our own strokes to avoid double-drawing
   const myStrokesRef = useRef(new Set());
-
-  const getMousePos = (e) => {
-    const rect = canvasRef.current.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  };
 
   const getDistance = (p1, p2) => {
     return Math.hypot(p2.x - p1.x, p2.y - p1.y);
@@ -44,13 +39,9 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
 
       const ctx = canvasRef.current?.getContext("2d");
       if (ctx) {
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-        
+        // Clear and redraw with infinite canvas
+        redrawCanvas();
         setStrokes(sketches || []);
-        
-        (sketches || []).forEach(stroke => {
-          drawStroke(stroke);
-        });
       }
       
     } catch (error) {
@@ -60,12 +51,40 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
     }
   };
 
-  const drawStroke = (stroke) => {
+  const redrawCanvas = () => {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+
+    // Clear the entire canvas
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    
+    // Draw grid background
+    infiniteCanvas.drawGrid(ctx);
+    
+    // Apply camera transform for drawing strokes
+    infiniteCanvas.applyTransform(ctx);
+    
+    // Draw all strokes in world coordinates
+    strokes.forEach(stroke => {
+      drawStrokeOnCanvas(ctx, stroke);
+    });
+    
+    // Draw current stroke if drawing
+    if (currentStroke) {
+      drawStrokeOnCanvas(ctx, currentStroke);
+    }
+    
+    // Reset transform
+    infiniteCanvas.resetTransform(ctx);
+  };
+
+  const drawStrokeOnCanvas = (ctx, stroke) => {
     if (!stroke.points || stroke.points.length < 2) return;
     
-    const ctx = canvasRef.current.getContext("2d");
     ctx.strokeStyle = stroke.color;
     ctx.lineWidth = stroke.size;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.beginPath();
     ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
     
@@ -76,14 +95,21 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
   };
 
   const startDrawing = (e) => {
+    // Check if infinite canvas is handling this event (panning)
+    if (infiniteCanvas.handleMouseDown(e)) {
+      return; // Infinite canvas is handling the event
+    }
+    
     if (isReplaying || isLoading || ownerConflict) return;
-    const pos = getMousePos(e);
+
+    // Get world coordinates instead of screen coordinates
+    const worldPos = infiniteCanvas.getWorldMousePos(e);
 
     const strokeId = crypto.randomUUID();
     setIsDrawing(true);
     setCurrentStroke({
       id: strokeId,
-      points: [pos],
+      points: [worldPos],
       size: strokeSize,
       color: strokeColor,
       length: 0,
@@ -94,28 +120,39 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
   };
 
   const draw = (e) => {
+    // Check if infinite canvas is handling this event
+    if (infiniteCanvas.handleMouseMove(e)) {
+      redrawCanvas(); // Redraw during panning
+      return;
+    }
+    
     if (!isDrawing || !currentStroke || isReplaying || isLoading || ownerConflict) return;
-    const pos = getMousePos(e);
-    const ctx = canvasRef.current.getContext("2d");
 
-    ctx.strokeStyle = currentStroke.color;
-    ctx.lineWidth = currentStroke.size;
-
+    // Get world coordinates
+    const worldPos = infiniteCanvas.getWorldMousePos(e);
     const lastPoint = currentStroke.points.slice(-1)[0];
-    ctx.beginPath();
-    ctx.moveTo(lastPoint.x, lastPoint.y);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
+    const dist = getDistance(lastPoint, worldPos);
 
-    const dist = getDistance(lastPoint, pos);
-    setCurrentStroke({
+    // Update current stroke
+    const updatedStroke = {
       ...currentStroke,
-      points: [...currentStroke.points, pos],
+      points: [...currentStroke.points, worldPos],
       length: currentStroke.length + dist,
-    });
+    };
+    
+    setCurrentStroke(updatedStroke);
+    
+    // Redraw canvas to show the current stroke
+    redrawCanvas();
   };
 
   const stopDrawing = async () => {
+    // Check if infinite canvas is handling this event
+    if (infiniteCanvas.handleMouseUp()) {
+      redrawCanvas(); // Redraw after panning ends
+      return;
+    }
+    
     if (!isDrawing || !currentStroke) return;
     setIsDrawing(false);
 
@@ -164,12 +201,11 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
         throw error;
       }
 
-      // Clear local state immediately
-      const ctx = canvasRef.current.getContext("2d");
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      // Clear local state and redraw
       setStrokes([]);
       setCurrentStroke(null);
       myStrokesRef.current.clear();
+      redrawCanvas();
       
     } catch (error) {
       console.error("Error clearing canvas:", error);
@@ -181,15 +217,25 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
     if (!strokes.length || isLoading || ownerConflict) return;
     setIsReplaying(true);
     
-    const ctx = canvasRef.current.getContext("2d");
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+
+    // Clear canvas and draw grid
     ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    infiniteCanvas.drawGrid(ctx);
+    
+    // Apply transform for replay
+    infiniteCanvas.applyTransform(ctx);
 
     for (const stroke of strokes) {
       if (!stroke.points || stroke.points.length < 2) continue;
       
       ctx.strokeStyle = stroke.color;
       ctx.lineWidth = stroke.size;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       
+      // Draw stroke progressively
       for (let i = 1; i < stroke.points.length; i++) {
         const p0 = stroke.points[i - 1];
         const p1 = stroke.points[i];
@@ -201,13 +247,13 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
         await new Promise((res) => setTimeout(res, 3));
       }
     }
+    
+    infiniteCanvas.resetTransform(ctx);
     setIsReplaying(false);
   };
 
   const handleMouseMove = (e) => {
-    if (isDrawing) {
-      draw(e);
-    }
+    draw(e);
   };
 
   const handleMouseLeave = () => {
@@ -215,6 +261,33 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
       stopDrawing();
     }
   };
+
+  // Zoom to fit all content
+  const zoomToFitContent = () => {
+    if (!strokes.length) return;
+    
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    strokes.forEach(stroke => {
+      stroke.points.forEach(point => {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+      });
+    });
+    
+    if (minX !== Infinity) {
+      infiniteCanvas.zoomToFit({ minX, minY, maxX, maxY });
+    }
+  };
+
+  // Redraw when camera changes
+  useEffect(() => {
+    if (!isLoading && !ownerConflict) {
+      redrawCanvas();
+    }
+  }, [infiniteCanvas.camera, strokes, currentStroke, isLoading, ownerConflict]);
 
   // Load existing sketches when component mounts
   useEffect(() => {
@@ -240,9 +313,8 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
           console.log('Received new stroke:', payload.new);
           const stroke = payload.new;
           
-          // Only draw strokes from other users
+          // Only add strokes from other users
           if (!myStrokesRef.current.has(stroke.id)) {
-            drawStroke(stroke);
             setStrokes((prev) => [...prev, stroke]);
           }
         }
@@ -257,11 +329,6 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
         },
         (payload) => {
           console.log('Sketches cleared');
-          // Clear canvas when sketches are deleted
-          const ctx = canvasRef.current?.getContext("2d");
-          if (ctx) {
-            ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-          }
           setStrokes([]);
           myStrokesRef.current.clear();
         }
@@ -290,6 +357,8 @@ export function useDrawing(canvasRef, roomId, userName, ownerConflict) {
     handleMouseLeave,
     stopDrawing,
     clearCanvas,
-    replayStrokes
+    replayStrokes,
+    zoomToFitContent,
+    redrawCanvas
   };
 }
