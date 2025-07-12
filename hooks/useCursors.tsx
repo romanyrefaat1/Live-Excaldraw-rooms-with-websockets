@@ -5,6 +5,7 @@ export function useCursors(roomId, userName, ownerConflict, infiniteCanvas) {
   const [otherCursors, setOtherCursors] = useState(new Map());
   const [isMouseOnCanvas, setIsMouseOnCanvas] = useState(false);
   const cursorThrottleRef = useRef(null);
+  const cameraThrottleRef = useRef(null);
   const channelRef = useRef(null);
 
   // Generate a random color for each user's cursor
@@ -38,11 +39,41 @@ export function useCursors(roomId, userName, ownerConflict, infiniteCanvas) {
             user: userName, 
             x: worldPos.x, 
             y: worldPos.y, 
-            color: generateUserColor(userName) 
+            color: generateUserColor(userName),
+            // Include camera state for followers
+            camera: {
+              x: infiniteCanvas.camera.x,
+              y: infiniteCanvas.camera.y,
+              zoom: infiniteCanvas.camera.zoom
+            }
           }
         });
       }
     }, 16); // ~60fps
+  };
+
+  // Throttled camera broadcasting (separate from cursor for better performance)
+  const broadcastCamera = () => {
+    if (cameraThrottleRef.current) {
+      clearTimeout(cameraThrottleRef.current);
+    }
+    
+    cameraThrottleRef.current = setTimeout(() => {
+      if (channelRef.current && infiniteCanvas) {
+        channelRef.current.send({
+          type: "broadcast",
+          event: "camera-update",
+          payload: { 
+            user: userName,
+            camera: {
+              x: infiniteCanvas.camera.x,
+              y: infiniteCanvas.camera.y,
+              zoom: infiniteCanvas.camera.zoom
+            }
+          }
+        });
+      }
+    }, 100); // Less frequent than cursor updates
   };
 
   // Mouse event handlers
@@ -74,6 +105,11 @@ export function useCursors(roomId, userName, ownerConflict, infiniteCanvas) {
     }
   };
 
+  // Expose camera broadcasting function for when camera changes
+  const handleCameraChange = () => {
+    broadcastCamera();
+  };
+
   // Realtime subscription for cursor updates
   useEffect(() => {
     if (!roomId || !userName || ownerConflict) return;
@@ -81,14 +117,40 @@ export function useCursors(roomId, userName, ownerConflict, infiniteCanvas) {
     const channel = supabase
       .channel("cursors-" + roomId)
       .on("broadcast", { event: "cursor-move" }, (payload) => {
-        const { user, x, y, color } = payload.payload;
+        const { user, x, y, color, camera } = payload.payload;
         
         // Don't show our own cursor
         if (user !== userName) {
           setOtherCursors(prev => {
             const newCursors = new Map(prev);
-            // Store world coordinates directly
-            newCursors.set(user, { x, y, color, lastSeen: Date.now() });
+            // Store world coordinates and camera state
+            newCursors.set(user, { 
+              x, 
+              y, 
+              color, 
+              camera: camera || null,
+              lastSeen: Date.now() 
+            });
+            return newCursors;
+          });
+        }
+      })
+      .on("broadcast", { event: "camera-update" }, (payload) => {
+        const { user, camera } = payload.payload;
+        
+        // Don't process our own camera updates
+        if (user !== userName) {
+          setOtherCursors(prev => {
+            const newCursors = new Map(prev);
+            const existingCursor = newCursors.get(user);
+            if (existingCursor) {
+              // Update camera info for existing cursor
+              newCursors.set(user, {
+                ...existingCursor,
+                camera: camera,
+                lastSeen: Date.now()
+              });
+            }
             return newCursors;
           });
         }
@@ -143,6 +205,7 @@ export function useCursors(roomId, userName, ownerConflict, infiniteCanvas) {
     otherCursors,
     handleMouseMove,
     handleMouseEnter,
-    handleMouseLeave
+    handleMouseLeave,
+    handleCameraChange
   };
 }

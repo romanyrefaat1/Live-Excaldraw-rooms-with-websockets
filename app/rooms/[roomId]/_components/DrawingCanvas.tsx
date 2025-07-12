@@ -135,6 +135,13 @@ export default function DrawingCanvas({ roomId }) {
     return "crosshair";
   };
 
+  // Handle camera changes and notify cursors
+  useEffect(() => {
+    if (cursors.handleCameraChange) {
+      cursors.handleCameraChange();
+    }
+  }, [infiniteCanvas.camera, cursors.handleCameraChange]);
+
   return (
     <div className="relative w-full h-screen overflow-hidden">
       <OwnerConflictModal 
