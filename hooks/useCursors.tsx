@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
-export function useCursors(roomId, userName, ownerConflict) {
+export function useCursors(roomId, userName, ownerConflict, infiniteCanvas) {
   const [otherCursors, setOtherCursors] = useState(new Map());
   const [isMouseOnCanvas, setIsMouseOnCanvas] = useState(false);
   const cursorThrottleRef = useRef(null);
@@ -20,27 +20,24 @@ export function useCursors(roomId, userName, ownerConflict) {
     return colors[Math.abs(hash) % colors.length];
   };
 
-  const getMousePos = (e) => {
-    const canvas = e.target;
-    const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  };
-
-  // Throttled cursor broadcasting
-  const broadcastCursor = (x, y) => {
+  // Throttled cursor broadcasting with world coordinates
+  const broadcastCursor = (screenX, screenY) => {
     if (cursorThrottleRef.current) {
       clearTimeout(cursorThrottleRef.current);
     }
     
     cursorThrottleRef.current = setTimeout(() => {
-      if (channelRef.current && isMouseOnCanvas) {
+      if (channelRef.current && isMouseOnCanvas && infiniteCanvas) {
+        // Convert screen coordinates to world coordinates
+        const worldPos = infiniteCanvas.screenToWorld(screenX, screenY);
+        
         channelRef.current.send({
           type: "broadcast",
           event: "cursor-move",
           payload: { 
             user: userName, 
-            x, 
-            y, 
+            x: worldPos.x, 
+            y: worldPos.y, 
             color: generateUserColor(userName) 
           }
         });
@@ -50,8 +47,14 @@ export function useCursors(roomId, userName, ownerConflict) {
 
   // Mouse event handlers
   const handleMouseMove = (e) => {
-    const pos = getMousePos(e);
-    broadcastCursor(pos.x, pos.y);
+    if (!infiniteCanvas) return;
+    
+    const canvas = e.target;
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    
+    broadcastCursor(screenX, screenY);
   };
 
   const handleMouseEnter = () => {
@@ -84,6 +87,7 @@ export function useCursors(roomId, userName, ownerConflict) {
         if (user !== userName) {
           setOtherCursors(prev => {
             const newCursors = new Map(prev);
+            // Store world coordinates directly
             newCursors.set(user, { x, y, color, lastSeen: Date.now() });
             return newCursors;
           });

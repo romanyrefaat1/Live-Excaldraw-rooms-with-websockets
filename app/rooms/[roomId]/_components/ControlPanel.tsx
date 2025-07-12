@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Move, Eye, EyeOff, Navigation } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Move, Eye, EyeOff, Navigation, ArrowDown, ArrowUp } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export default function ControlPanel({
@@ -32,6 +32,7 @@ export default function ControlPanel({
   setGridOpacity
 }) {
   const [followingUser, setFollowingUser] = useState(null);
+  const [isOpen, setIsOpen] = useState(true);
 
   // Follow cursor functionality
   const handleFollowUser = (user) => {
@@ -156,6 +157,8 @@ export default function ControlPanel({
   return (
     <div className="fixed top-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg p-4 shadow-lg border max-w-sm max-h-[calc(100vh-2rem)] overflow-y-auto">
       {/* Connection Status */}
+      <button onClick={() => setIsOpen(prev => !prev)}>{isOpen ? <ArrowDown /> : <ArrowUp />}</button>
+      {isOpen && <>
       <div className="flex items-center gap-3 mb-3">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -446,6 +449,7 @@ export default function ControlPanel({
           {isReplaying ? "Replaying..." : "Replay"}
         </button>
       </div>
+      </>}
     </div>
   );
 }

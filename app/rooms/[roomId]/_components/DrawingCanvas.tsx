@@ -34,7 +34,7 @@ export default function DrawingCanvas({ roomId }) {
   
   // Custom hooks for different concerns
   const roomState = useRoomState(roomId, userName);
-  const cursors = useCursors(roomId, userName, roomState.ownerConflict);
+  const cursors = useCursors(roomId, userName, roomState.ownerConflict, infiniteCanvas);
   const drawing = useDrawing(canvasRef, roomId, userName, roomState.ownerConflict, infiniteCanvas);
 
   // Canvas setup
@@ -196,6 +196,7 @@ export default function DrawingCanvas({ roomId }) {
           key={user}
           user={user}
           cursor={cursor}
+          infiniteCanvas={infiniteCanvas}
         />
       ))}
       
